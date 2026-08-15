@@ -3,6 +3,7 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 import torch
+from utils import latlng_to_xyz
 
 class GeoDataset(Dataset):
     def __init__(self, csv_path, img_dir, transform=None):
@@ -27,8 +28,11 @@ class GeoDataset(Dataset):
             image = self.transform(image)
 
         # normalize lng and lat
-        lat_norm = row["lat"] / 90.0
-        lng_norm = row["lng"] / 180.0
-        target = torch.tensor([lat_norm, lng_norm], dtype=torch.float32)
+        # lat_norm = row["lat"] / 90.0
+        # lng_norm = row["lng"] / 180.0
+        # target = torch.tensor([lat_norm, lng_norm], dtype=torch.float32)
+
+        x, y, z = latlng_to_xyz(row["lat"], row["lng"])
+        target = torch.tensor([x, y, z], dtype=torch.float32)
 
         return image, target

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class GeoCNN(nn.Module):
-    def __init__(self, output_dim=2):
+    def __init__(self, output_dim=3):
         super().__init__()
 
         self.features = nn.Sequential(

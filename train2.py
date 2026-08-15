@@ -7,12 +7,12 @@ from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dataset_sphere import GeoDatasetSphere
+from dataset import GeoDataset
 from model import GeoCNN
 from utils import haversine_km, count_parameters, xyz_to_latlng
 
 BATCH_SIZE = 32
-EPOCHS = 20
+EPOCHS = 40
 LR = 1e-3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -21,8 +21,8 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-train_ds = GeoDatasetSphere("geo_dataset/train_split2.csv", "geo_dataset/train", transform=transform)
-val_ds = GeoDatasetSphere("geo_dataset/val_split2.csv", "geo_dataset/train", transform=transform)
+train_ds = GeoDataset("geo_dataset/train_split.csv", "geo_dataset/train", transform=transform)
+val_ds = GeoDataset("geo_dataset/val_split.csv", "geo_dataset/train", transform=transform)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
