@@ -12,7 +12,7 @@ from utils import haversine_km, count_parameters
 
 # ---- config ----
 BATCH_SIZE = 32
-EPOCHS = 20
+EPOCHS = 40
 LR = 1e-3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

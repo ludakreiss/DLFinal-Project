@@ -32,7 +32,7 @@ results = []
 with torch.no_grad():
     for fname in filenames:
         img_path = os.path.join(HOLDOUT_DIR, fname)
-        image = Image.open(img_path).convert("RGB")
+        image = Image.open(img_path)
         image = transform(image).unsqueeze(0).to(DEVICE)  # add batch dim
 
         pred = model(image).cpu().numpy()[0]  # [lat_norm, lng_norm]
