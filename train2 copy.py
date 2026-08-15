@@ -26,12 +26,12 @@ train_transform = aug_map[args.aug]
 print(f"Using augmentation config: {args.aug}")
 
 BATCH_SIZE = 32
-EPOCHS = 20
+EPOCHS = 40
 LR = 1e-3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-train_ds = GeoDatasetSphere("geo_dataset/train_split.csv", "geo_dataset/train", transform=train_transform)
-val_ds = GeoDatasetSphere("geo_dataset/val_split.csv", "geo_dataset/train", transform=transform_val)
+train_ds = GeoDataset("geo_dataset/train_split.csv", "geo_dataset/train", transform=train_transform)
+val_ds = GeoDataset("geo_dataset/val_split.csv", "geo_dataset/train", transform=transform_val)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
