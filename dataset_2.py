@@ -11,9 +11,8 @@ class GeoDatasetHierarchical(Dataset):
         self.img_dir = img_dir
         self.transform = transform
         self.country_to_idx = country_to_idx
-        self.centroids = centroids  # DataFrame indexed by country, columns lat/lng
-        self.offset_std_lat, self.offset_std_lng = offset_std  # tuple
-
+        self.centroids = centroids
+        self.offset_std_lat, self.offset_std_lng = offset_std
 
     def __len__(self):
         return len(self.df)
@@ -32,7 +31,6 @@ class GeoDatasetHierarchical(Dataset):
         centroid_lat = self.centroids.loc[country, "lat"]
         centroid_lng = self.centroids.loc[country, "lng"]
 
-        # offset target: true coord minus TRUE country's centroid (teacher forcing)
         delta_lat = (row["lat"] - centroid_lat) / self.offset_std_lat
         delta_lng = (row["lng"] - centroid_lng) / self.offset_std_lng
         offset_target = torch.tensor([delta_lat, delta_lng], dtype=torch.float32)

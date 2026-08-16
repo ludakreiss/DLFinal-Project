@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from dataset_2 import GeoDatasetHierarchical
-from newmodel import GeoCNNHierarchical
+from dataset_hierarchical import GeoDatasetHierarchical
+from model import GeoCNNHierarchical
 from utils import haversine_km, count_parameters
-from transform_config import transform_none, transform_val
+from transforms_config import transform_none, transform_val
 
 BATCH_SIZE = 32
 EPOCHS = 40
@@ -23,7 +23,7 @@ country_to_idx = {c: i for i, c in enumerate(countries)}
 idx_to_country = {i: c for c, i in country_to_idx.items()}
 
 centroids = pd.read_csv("geo_dataset/country_centroids.csv").set_index("country")
-# load offset normalization stats
+
 with open("geo_dataset/offset_stats.txt") as f:
     offset_std_lat, offset_std_lng = map(float, f.read().split(","))
 offset_std = (offset_std_lat, offset_std_lng)
@@ -43,7 +43,7 @@ offset_criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 best_val_haversine = float("inf")
-history = {"train_loss": [], "val_acc": [], "val_median_km": [], "val_mean_km": []}
+history = {"train_loss": [], "val_acc": [], "val_median_km": [], "val_mean_km": [], "oracle_median_km": []}
 
 val_df = pd.read_csv("geo_dataset/val_split.csv")
 
@@ -69,10 +69,12 @@ for epoch in range(EPOCHS):
 
     train_loss /= len(train_ds)
 
-    # ---- validate: use PREDICTED country's centroid + predicted offset ----
+    # ---- validate ----
     model.eval()
     correct = 0
-    all_dists = []
+    all_dists = []        # using PREDICTED country (real-world scenario)
+    oracle_dists = []      # using TRUE country (isolates offset-regression quality)
+
     with torch.no_grad():
         for i, (images, country_labels, offset_targets) in enumerate(val_loader):
             images = images.to(DEVICE)
@@ -80,54 +82,69 @@ for epoch in range(EPOCHS):
 
             preds_class = class_logits.argmax(dim=1).cpu().numpy()
             offset_preds_np = offset_preds.cpu().numpy()
-            correct += (preds_class == country_labels.numpy()).sum()
+            true_class = country_labels.numpy()
+            correct += (preds_class == true_class).sum()
 
             batch_start = i * BATCH_SIZE
-            for j, pred_country_idx in enumerate(preds_class):
-                pred_country = idx_to_country[pred_country_idx]
-                centroid_lat = centroids.loc[pred_country, "lat"]
-                centroid_lng = centroids.loc[pred_country, "lng"]
-
-                final_lat = centroid_lat + offset_preds_np[j, 0] * offset_std_lat
-                final_lng = centroid_lng + offset_preds_np[j, 1] * offset_std_lng
-
+            for j in range(len(preds_class)):
                 true_row = val_df.iloc[batch_start + j]
                 true_lat, true_lng = true_row["lat"], true_row["lng"]
 
+                # --- real-world: use predicted country ---
+                pred_country = idx_to_country[preds_class[j]]
+                c_lat = centroids.loc[pred_country, "lat"]
+                c_lng = centroids.loc[pred_country, "lng"]
+                final_lat = c_lat + offset_preds_np[j, 0] * offset_std_lat
+                final_lng = c_lng + offset_preds_np[j, 1] * offset_std_lng
                 dist = haversine_km(final_lat, final_lng, true_lat, true_lng)
                 all_dists.append(dist)
+
+                # --- oracle: use TRUE country (isolates offset regression quality) ---
+                true_country = idx_to_country[true_class[j]]
+                oc_lat = centroids.loc[true_country, "lat"]
+                oc_lng = centroids.loc[true_country, "lng"]
+                oracle_lat = oc_lat + offset_preds_np[j, 0] * offset_std_lat
+                oracle_lng = oc_lng + offset_preds_np[j, 1] * offset_std_lng
+                oracle_dist = haversine_km(oracle_lat, oracle_lng, true_lat, true_lng)
+                oracle_dists.append(oracle_dist)
 
     val_acc = correct / len(val_ds)
     median_haversine = np.median(all_dists)
     mean_haversine = np.mean(all_dists)
+    oracle_median = np.median(oracle_dists)
 
     history["train_loss"].append(train_loss)
     history["val_acc"].append(val_acc)
     history["val_median_km"].append(median_haversine)
     history["val_mean_km"].append(mean_haversine)
+    history["oracle_median_km"].append(oracle_median)
 
     print(f"Epoch {epoch+1}/{EPOCHS} | train_loss={train_loss:.4f} | "
-          f"val_acc={val_acc:.3f} | val_median_km={median_haversine:.1f} | val_mean_km={mean_haversine:.1f}")
+          f"val_acc={val_acc:.3f} | val_median_km={median_haversine:.1f} | "
+          f"oracle_median_km={oracle_median:.1f}")
 
     if median_haversine < best_val_haversine:
         best_val_haversine = median_haversine
         torch.save(model.state_dict(), "checkpoints/best_model_hierarchical.pt")
         print(f"  -> saved new best hierarchical model (median={median_haversine:.1f} km)")
 
-print("Training complete. Best val median haversine (hierarchical):", best_val_haversine)
+print("Training complete.")
+print("Best val median haversine (predicted country):", best_val_haversine)
+print("Final oracle median haversine (true country):", history["oracle_median_km"][-1])
+print("Final classification accuracy:", history["val_acc"][-1])
 
 epochs_range = range(1, EPOCHS + 1)
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 axes[0].plot(epochs_range, history["train_loss"], marker="o", color="tab:blue")
-axes[0].set_title("Training Loss (weighted sum)")
+axes[0].set_title("Training Loss")
 axes[0].grid(True, alpha=0.3)
 
 axes[1].plot(epochs_range, history["val_acc"], marker="o", color="tab:purple")
 axes[1].set_title("Validation Country Accuracy")
 axes[1].grid(True, alpha=0.3)
 
-axes[2].plot(epochs_range, history["val_median_km"], marker="o", label="Median", color="tab:green")
-axes[2].plot(epochs_range, history["val_mean_km"], marker="o", label="Mean", color="tab:orange")
+axes[2].plot(epochs_range, history["val_median_km"], marker="o", label="Predicted country", color="tab:green")
+axes[2].plot(epochs_range, history["oracle_median_km"], marker="o", label="True country (oracle)", color="tab:red")
 axes[2].set_title("Validation Haversine (km)")
 axes[2].legend()
 axes[2].grid(True, alpha=0.3)
