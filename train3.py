@@ -23,9 +23,14 @@ country_to_idx = {c: i for i, c in enumerate(countries)}
 idx_to_country = {i: c for c, i in country_to_idx.items()}
 
 centroids = pd.read_csv("geo_dataset/country_centroids.csv").set_index("country")
+# load offset normalization stats
+with open("geo_dataset/offset_stats.txt") as f:
+    offset_std_lat, offset_std_lng = map(float, f.read().split(","))
+offset_std = (offset_std_lat, offset_std_lng)
+print(f"Offset std: lat={offset_std_lat:.4f}, lng={offset_std_lng:.4f}")
 
-train_ds = GeoDatasetHierarchical("geo_dataset/train_split.csv", "geo_dataset/train", country_to_idx, centroids, transform=transform_none)
-val_ds = GeoDatasetHierarchical("geo_dataset/val_split.csv", "geo_dataset/train", country_to_idx, centroids, transform=transform_val)
+train_ds = GeoDatasetHierarchical("geo_dataset/train_split.csv", "geo_dataset/train", country_to_idx, centroids, offset_std, transform=transform_none)
+val_ds = GeoDatasetHierarchical("geo_dataset/val_split.csv", "geo_dataset/train", country_to_idx, centroids, offset_std, transform=transform_val)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
 val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
@@ -83,8 +88,8 @@ for epoch in range(EPOCHS):
                 centroid_lat = centroids.loc[pred_country, "lat"]
                 centroid_lng = centroids.loc[pred_country, "lng"]
 
-                final_lat = centroid_lat + offset_preds_np[j, 0]
-                final_lng = centroid_lng + offset_preds_np[j, 1]
+                final_lat = centroid_lat + offset_preds_np[j, 0] * offset_std_lat
+                final_lng = centroid_lng + offset_preds_np[j, 1] * offset_std_lng
 
                 true_row = val_df.iloc[batch_start + j]
                 true_lat, true_lng = true_row["lat"], true_row["lng"]
