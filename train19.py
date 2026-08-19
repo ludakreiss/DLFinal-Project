@@ -14,7 +14,7 @@ from model19 import GeoClassifier
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 32
-EPOCHS = 30
+EPOCHS = 40
 LR = 1e-3
 
 # ---- build country_to_idx mapping (you already wrote this logic) ----
@@ -35,8 +35,8 @@ transform = transforms.Compose([
 train_ds = GeoDatasetClassify(csv_path="geo_dataset/train_split.csv", img_dir="geo_dataset/train", country_to_idx=country_to_idx, transform=transform)
 val_ds = GeoDatasetClassify(csv_path="geo_dataset/val_split.csv", img_dir="geo_dataset/train", country_to_idx=country_to_idx, transform=transform)
 
-train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)   # should training data be shuffled?
-val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)       # should validation data be shuffled?
+train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, num_workers=5)   # should training data be shuffled?
+val_loader = DataLoader(val_ds, batch_size=32, shuffle=False,  num_workers=5)       # should validation data be shuffled?
 
 # ---- model, loss, optimizer ----
 model = GeoClassifier(num_countries=len(countries)).to(DEVICE)
@@ -50,25 +50,24 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LR)         # torch.optim ha
 best_val_acc = 0.0
 
 for epoch in range(EPOCHS):
-    # ---- training half ----
-    model.train()   # tells the model "we're training" (affects Dropout/BatchNorm behavior)
+    model.train()
     train_loss = 0.0
-    
 
-    for images, labels in train_loader:
-        for batch_idx, (images, labels) in enumerate(train_loader):
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+    print(f"\n========== Epoch {epoch+1}/{EPOCHS} ==========")
 
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+    for batch_idx, (images, labels) in enumerate(train_loader):
+        images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-            train_loss += loss.item() * images.size(0)
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
 
-            if batch_idx % 50 == 0:
-                print(f"  batch {batch_idx}/{len(train_loader)} | loss={loss.item():.4f}")
+        train_loss += loss.item() * images.size(0)
+
+        if batch_idx % 50 == 0:
+            print(f"  batch {batch_idx}/{len(train_loader)} | loss={loss.item():.4f}")
 
     train_loss /= len(train_ds)
     print(f"Epoch {epoch+1}/{EPOCHS} | train_loss={train_loss:.4f}")
