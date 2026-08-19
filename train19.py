@@ -6,9 +6,10 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 from dataset19 import GeoDatasetClassify
-from utils import haversine_km
+from utils import haversine_km, count_parameters
 from model19 import GeoClassifier
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,6 +40,7 @@ val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)       # should val
 
 # ---- model, loss, optimizer ----
 model = GeoClassifier(num_countries=len(countries)).to(DEVICE)
+print("Trainable parameters:", count_parameters(model))
 criterion = nn.CrossEntropyLoss()          # which PyTorch loss function is standard for multi-class classification?
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)         # torch.optim has an optimizer class you've used before
 
@@ -51,18 +53,22 @@ for epoch in range(EPOCHS):
     # ---- training half ----
     model.train()   # tells the model "we're training" (affects Dropout/BatchNorm behavior)
     train_loss = 0.0
+    
 
     for images, labels in train_loader:
-        images, labels = images.to(DEVICE), labels.to(DEVICE)   # move data to DEVICE
+        for batch_idx, (images, labels) in enumerate(train_loader):
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-        optimizer.zero_grad()              # clear old gradients - which optimizer method does this?
-        outputs = model(images)          # run the forward pass - what goes in?
-        loss = criterion(outputs, labels)    # compare outputs to labels - what order do the arguments go in?
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-        loss.backward()                    # compute gradients - which method triggers backprop?
-        optimizer.step()               # apply the weight update - which method does this?
+            train_loss += loss.item() * images.size(0)
 
-        train_loss += loss.item() * images.size(0)
+            if batch_idx % 50 == 0:
+                print(f"  batch {batch_idx}/{len(train_loader)} | loss={loss.item():.4f}")
 
     train_loss /= len(train_ds)
     print(f"Epoch {epoch+1}/{EPOCHS} | train_loss={train_loss:.4f}")
